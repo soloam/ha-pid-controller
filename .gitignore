@@ -5,3 +5,6 @@ __pycache__/
 
 # VSCode
 .vscode
+
+#Resources
+resources/*.psd
