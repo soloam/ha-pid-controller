@@ -1,0 +1,12 @@
+#
+#  Copyright (c) 2022, Diogo Silva "Soloam"
+#  Creative Commons BY-NC-SA 4.0 International Public License
+#  (see LICENSE.md or https://creativecommons.org/licenses/by-nc-sa/4.0/)
+#
+
+reset_pid:
+  description: Reset a PID Controller
+  fields:
+    entity_id:
+      description: Name(s) of entities to reset
+      example: 'sensor.temperture_controller'

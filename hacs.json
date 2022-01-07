@@ -1,0 +1,8 @@
+{
+    "name": "PID Controller",
+    "homeassistant": "2021.9",
+    "render_readme": true,
+    "domains": [ "sensor"],
+    "persistent_directory": "codes",
+    "iot_class": "Assumed State"
+  }
