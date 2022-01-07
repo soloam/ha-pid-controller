@@ -204,8 +204,8 @@ The PID standard behavior is to output the power that would be needed to raise t
 
 ***
 
-[pid_graph]: https://raw.github.com/soloam/ha-pid-controller/raw/master/resources/pid_graph.png
-[pid_phase1]: https://raw.github.com/soloam/ha-pid-controller/raw/master/resources/pip_phase1.png
-[pid_phase2]: https://raw.github.com/soloam/ha-pid-controller/raw/master/resources/pip_phase2.png
-[pid_phase3]: https://raw.github.com/soloam/ha-pid-controller/raw/master/resources/pip_phase3.png
-[pid_phase4]: https://raw.github.com/soloam/ha-pid-controller/raw/master/resources/pip_phase4.png
+[pid_graph]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pid_graph.png
+[pid_phase1]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase1.png
+[pid_phase2]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase2.png
+[pid_phase3]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase3.png
+[pid_phase4]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase4.png
