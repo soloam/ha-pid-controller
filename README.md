@@ -9,7 +9,7 @@ A PID Controller allows you to target a set value and achieve that setting in a 
 
 
 ## What makes a PID Controller special
-When coding a temperature controller for exemple, we like to set the max temperature and control the flow output or temperature output, based on the response from the temperature sensors.A PID Controller retrieves the response of the sensors and calculates the power output necessary to archive the desired target or maintain it with small oscillations.
+When coding a temperature controller for exemple, we like to set the max temperature and control the flow output or temperature output, based on the response from the temperature sensors.A PID Controller retrieves the response of the sensors and calculates the power output necessary to achieve the desired target or maintain it with small oscillations.
 ## Installation
 ### Install from HACS (recommended)
 1. Have [HACS][hacs] installed, this will allow you to easily manage and track updates.
