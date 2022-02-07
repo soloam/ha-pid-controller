@@ -2,7 +2,7 @@
 
 A PID Controller allows you to target a set value and achieve that setting in a smoothly and mantinin it without fluctuations
 
-[![gh_release]](../../releases)
+[![gh_release](https://img.shields.io/github/v/release/soloam/ha-pid-controller)](../../releases)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![gh_last_commit]](../../commits/master)
 ![PID Graph][pid_graph]
@@ -208,7 +208,6 @@ The PID standard behavior is to output the power that would be needed to raise t
 
 
 ***
-[gh_release]: https://img.shields.io/github/v/release/soloam/ha-pid-controller
 [gh_last_commit]: https://img.shields.io/github/last-commit/soloam/ha-pid-controller
 [pid_graph]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pid_graph.png
 [pid_phase1]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase1.png
