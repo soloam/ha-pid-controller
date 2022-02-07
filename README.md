@@ -3,7 +3,7 @@
 A PID Controller allows you to target a set value and achieve that setting in a smoothly and mantinin it without fluctuations
 
 [![gh_release]](../../releases)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![gh_last_commit]](../../commits/master)
 ![PID Graph][pid_graph]
 
