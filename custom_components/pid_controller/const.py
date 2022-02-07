@@ -18,7 +18,6 @@ COMPONENT_SERVICES = "pid-services"
 SERVICE_RESET_PID = "reset_pid"
 
 # Configuration
-CONF_NAME = "name"
 CONF_SETPOINT = "set_point"
 CONF_PROPORTIONAL = "p"
 CONF_INTEGRAL = "i"
@@ -54,6 +53,7 @@ ATTR_MINIMUM = "minimum"
 ATTR_MAXIMUM = "maximum"
 ATTR_RAW_STATE = "raw_state"
 ATTR_SAMPLE_TIME = "sample_time"
+ATTR_INVERT = "invert"
 ATTR_P = "p"
 ATTR_I = "i"
 ATTR_D = "d"
@@ -68,6 +68,7 @@ ATTR_TO_PROPERTY = [
     ATTR_MINIMUM,
     ATTR_MAXIMUM,
     ATTR_RAW_STATE,
+    ATTR_INVERT,
     ATTR_SAMPLE_TIME,
     ATTR_P,
     ATTR_I,

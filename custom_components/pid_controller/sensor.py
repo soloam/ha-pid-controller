@@ -156,6 +156,7 @@ class PidController(SensorEntity):
         self._precision_template = precision
         self._entities = []
         self._force_update = []
+        self._reset_pid = []
         self._pid = None
         self._source = entity_id
         self._get_entities()
@@ -529,6 +530,7 @@ class PidController(SensorEntity):
                 self.show_template_exception(ex, CONF_SETPOINT)
             else:
                 self._entities += info.entities
+                self._reset_pid += info.entities
 
         if self._sample_time_template is not None:
             try:
@@ -613,6 +615,8 @@ class PidController(SensorEntity):
                 self.show_template_exception(ex, CONF_INVERT)
             else:
                 self._entities += info.entities
+                self._force_update += info.entities
+                self._reset_pid += info.entities
 
         self._entities += [self._source]
 
@@ -624,10 +628,13 @@ class PidController(SensorEntity):
         """Update the sensor state if it needed."""
         self._update_sensor()
 
-    def _update_sensor(self) -> None:
+    def _update_sensor(self, entity=None) -> None:
         if self.set_point == 0:
             self._attr_state = 0
             return
+
+        if entity in self._reset_pid:
+            self.reset_pid()
 
         source = self.source
         set_point = self.set_point
@@ -654,8 +661,8 @@ class PidController(SensorEntity):
                 self._pid.windup = self.windup
 
             if set_point != self._pid.set_point:
-                self._pid.set_point = set_point
                 self.reset_pid()
+                self._pid.set_point = set_point
 
             self._pid.update(source)
 
@@ -672,7 +679,7 @@ class PidController(SensorEntity):
         def sensor_state_listener(entity, old_state, new_state):
             """Handle device state changes."""
             last_state = self.state
-            self._update_sensor()
+            self._update_sensor(entity=entity)
             if last_state != self.state or entity in self._force_update:
                 self.async_schedule_update_ha_state(True)
 
