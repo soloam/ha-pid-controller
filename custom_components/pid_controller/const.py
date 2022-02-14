@@ -36,6 +36,9 @@ DEFAULT_MAXIMUM = 1
 DEFAULT_ROUND = "round"
 DEFAULT_SAMPLE_TIME = 0
 DEFAULT_WINDUP = 20
+DEFAULT_UNIT_OF_MEASUREMENT = "points"
+DEFAULT_DEVICE_CLASS = "None"
+DEFAULT_ICON = "mdi:chart-bell-curve-cumulative"
 
 # Other
 ROUND_FLOOR = "floor"
@@ -43,6 +46,9 @@ ROUND_CEIL = "ceil"
 ROUND_ROUND = "round"
 
 # Attributes
+ATTR_ICON = "icon"
+ATTR_UNIT_OF_MEASUREMENT = "unit_of_measuremnt"
+ATTR_DEVICE_CLASS = "device_class"
 ATTR_PROPORTIONAL = "proportional"
 ATTR_INTEGRAL = "integral"
 ATTR_DERIVATIVE = "derivative"
@@ -59,6 +65,9 @@ ATTR_I = "i"
 ATTR_D = "d"
 
 ATTR_TO_PROPERTY = [
+    ATTR_ICON,
+    ATTR_UNIT_OF_MEASUREMENT,
+    ATTR_DEVICE_CLASS,
     ATTR_PROPORTIONAL,
     ATTR_INTEGRAL,
     ATTR_DERIVATIVE,

@@ -15,15 +15,22 @@ from typing import Any, Mapping, Optional
 
 import voluptuous as vol
 from _sha1 import sha1
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorDeviceClass,
+    SensorStateClass,
+)
 from homeassistant.const import (
     CONF_ENTITY_ID,
     CONF_NAME,
+    CONF_ICON,
     CONF_UNIQUE_ID,
     EVENT_HOMEASSISTANT_START,
     STATE_UNAVAILABLE,
     CONF_MINIMUM,
     CONF_MAXIMUM,
+    CONF_UNIT_OF_MEASUREMENT,
+    CONF_DEVICE_CLASS,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import TemplateError
@@ -45,6 +52,7 @@ PLATFORM_SCHEMA = vol.All(
         {
             vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
             vol.Optional(CONF_UNIQUE_ID): cv.string,
+            vol.Optional(CONF_ICON, default=DEFAULT_ICON): cv.template,
             vol.Required(CONF_SETPOINT): cv.template,
             vol.Optional(CONF_PROPORTIONAL, default=0): cv.template,
             vol.Optional(CONF_INTEGRAL, default=0): cv.template,
@@ -57,6 +65,11 @@ PLATFORM_SCHEMA = vol.All(
             vol.Optional(CONF_ROUND, default=DEFAULT_ROUND): cv.template,
             vol.Optional(CONF_SAMPLE_TIME, default=DEFAULT_SAMPLE_TIME): cv.template,
             vol.Optional(CONF_WINDUP, default=DEFAULT_WINDUP): cv.template,
+            vol.Optional(CONF_WINDUP, default=DEFAULT_WINDUP): cv.template,
+            vol.Optional(
+                CONF_UNIT_OF_MEASUREMENT, default=DEFAULT_UNIT_OF_MEASUREMENT
+            ): cv.template,
+            vol.Optional(CONF_DEVICE_CLASS, default=DEFAULT_DEVICE_CLASS): cv.template,
         }
     )
 )
@@ -66,6 +79,7 @@ async def async_setup_platform(
     hass: HomeAssistant, config, async_add_entities, discovery_info=None
 ):
 
+    icon = config.get(CONF_ICON)
     set_point = config.get(CONF_SETPOINT)
     proportional = config.get(CONF_PROPORTIONAL)
     integral = config.get(CONF_INTEGRAL)
@@ -77,9 +91,12 @@ async def async_setup_platform(
     round_type = config.get(CONF_ROUND)
     sample_time = config.get(CONF_SAMPLE_TIME)
     windup = config.get(CONF_WINDUP)
+    unit_of_measurement = config.get(CONF_UNIT_OF_MEASUREMENT)
+    device_class = config.get(CONF_DEVICE_CLASS)
 
     ## Process Templates.
     for template in [
+        icon,
         set_point,
         sample_time,
         windup,
@@ -91,6 +108,8 @@ async def async_setup_platform(
         minimum,
         maximum,
         round_type,
+        unit_of_measurement,
+        device_class,
     ]:
         if template is not None:
             template.hass = hass
@@ -102,7 +121,10 @@ async def async_setup_platform(
                 hass,
                 config.get(CONF_UNIQUE_ID),
                 config.get(CONF_NAME),
+                icon,
                 set_point,
+                unit_of_measurement,
+                device_class,
                 sample_time,
                 windup,
                 proportional,
@@ -128,7 +150,10 @@ class PidController(SensorEntity):
         hass: HomeAssistant,
         unique_id,
         name,
+        icon,
         set_point,
+        unit_of_measurement,
+        device_class,
         sample_time,
         windup,
         proportional,
@@ -142,7 +167,10 @@ class PidController(SensorEntity):
         entity_id,
     ):
         self._attr_name = name
+        self._icon_template = icon
         self._set_point_template = set_point
+        self._unit_of_measurement_template = unit_of_measurement
+        self._device_class_template = device_class
         self._sample_time_template = sample_time
         self._windup_template = windup
         self._attr_state = 0
@@ -182,6 +210,19 @@ class PidController(SensorEntity):
     def available(self) -> bool:
         """Return True if entity is available."""
         return True
+
+    @property
+    def icon(self) -> str:
+        """Returns Icon"""
+        icon = DEFAULT_ICON
+        if self._icon_template is not None:
+            try:
+                icon = self._icon_template.async_render(parse_result=False)
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_ICON)
+                icon = DEFAULT_ICON
+
+        return icon
 
     @property
     def state(self) -> StateType:
@@ -272,6 +313,36 @@ class PidController(SensorEntity):
             return float(set_point)
 
         return float(0)
+
+    @property
+    def unit_of_measurement(self) -> str:
+        """Returns Unit Of Measurement"""
+
+        if self._unit_of_measurement_template is not None:
+            try:
+                unit_of_measurement = self._unit_of_measurement_template.async_render(
+                    parse_result=False
+                )
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_UNIT_OF_MEASUREMENT)
+                unit_of_measurement = DEFAULT_UNIT_OF_MEASUREMENT
+
+        return unit_of_measurement
+
+    @property
+    def device_class(self) -> SensorDeviceClass:
+        """Returns Device Class"""
+
+        if self._device_class_template is not None:
+            try:
+                device_class = self._device_class_template.async_render(
+                    parse_result=False
+                )
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_DEVICE_CLASS)
+                device_class = DEFAULT_DEVICE_CLASS
+
+        return device_class
 
     @property
     def sample_time(self) -> int:
@@ -523,6 +594,14 @@ class PidController(SensorEntity):
         self._entities = []
         self._force_update = []
 
+        if self._icon_template is not None:
+            try:
+                info = self._icon_template.async_render_to_info()
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_ICON)
+            else:
+                self._entities += info.entities
+
         if self._set_point_template is not None:
             try:
                 info = self._set_point_template.async_render_to_info()
@@ -531,6 +610,24 @@ class PidController(SensorEntity):
             else:
                 self._entities += info.entities
                 self._reset_pid += info.entities
+
+        if self._unit_of_measurement_template is not None:
+            try:
+                info = self._unit_of_measurement_template.async_render_to_info()
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_UNIT_OF_MEASUREMENT)
+            else:
+                self._entities += info.entities
+                self._force_update += info.entities
+
+        if self._device_class_template is not None:
+            try:
+                info = self._device_class_template.async_render_to_info()
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_DEVICE_CLASS)
+            else:
+                self._entities += info.entities
+                self._force_update += info.entities
 
         if self._sample_time_template is not None:
             try:
