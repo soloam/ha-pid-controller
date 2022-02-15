@@ -21,9 +21,10 @@ jobs:
           sed -i 's/v0.0.0/${{ steps.version.outputs.version }}/' custom_components/pid_controller/manifest.json
           cd custom_components/pid_controller/
           zip ../../pid_controller.zip -r ./
-      - uses: gacts/upload-to-release@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: svenstaro/upload-release-action@master
         with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./pid_controller.zip
-          type: application/zip
+          asset_name: pid_controller.zip
+          tag: ${{ github.ref }}
+          overwrite: true
