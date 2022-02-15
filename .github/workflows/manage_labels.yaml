@@ -15,4 +15,3 @@ jobs:
 
       - name: Run Labeler
         uses: crazy-max/ghaction-github-labeler@v3.1.1
-        yaml-file: .github/labels.yaml
