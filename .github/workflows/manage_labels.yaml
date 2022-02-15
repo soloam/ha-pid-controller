@@ -7,7 +7,7 @@ on:
 
 jobs:
   labeler:
-    name: Update labels
+    name: Update Labels
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
