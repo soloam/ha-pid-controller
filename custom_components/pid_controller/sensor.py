@@ -9,17 +9,19 @@ For more details about this sensor, please refer to the documentation at
 https://github.com/soloam/ha-pid-controller/
 """
 
+from datetime import datetime
 import logging
 from math import floor, ceil
+from tkinter import Y
 from typing import Any, Mapping, Optional
+
+from numpy import ones, vstack
+from numpy.linalg import lstsq
+from statistics import mean
 
 import voluptuous as vol
 from _sha1 import sha1
-from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorDeviceClass,
-    SensorStateClass,
-)
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.const import (
     CONF_ENTITY_ID,
     CONF_NAME,
@@ -50,9 +52,10 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORM_SCHEMA = vol.All(
     PLATFORM_SCHEMA.extend(
         {
+            vol.Optional(CONF_ENABLED, default=DEFAULT_ENABLED): cv.template,
+            vol.Optional(CONF_ICON, default=DEFAULT_ICON): cv.template,
             vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
             vol.Optional(CONF_UNIQUE_ID): cv.string,
-            vol.Optional(CONF_ICON, default=DEFAULT_ICON): cv.template,
             vol.Required(CONF_SETPOINT): cv.template,
             vol.Optional(CONF_PROPORTIONAL, default=0): cv.template,
             vol.Optional(CONF_INTEGRAL, default=0): cv.template,
@@ -79,6 +82,7 @@ async def async_setup_platform(
     hass: HomeAssistant, config, async_add_entities, discovery_info=None
 ):
 
+    enabled = config.get(CONF_ENABLED)
     icon = config.get(CONF_ICON)
     set_point = config.get(CONF_SETPOINT)
     proportional = config.get(CONF_PROPORTIONAL)
@@ -96,6 +100,7 @@ async def async_setup_platform(
 
     ## Process Templates.
     for template in [
+        enabled,
         icon,
         set_point,
         sample_time,
@@ -121,6 +126,7 @@ async def async_setup_platform(
                 hass,
                 config.get(CONF_UNIQUE_ID),
                 config.get(CONF_NAME),
+                enabled,
                 icon,
                 set_point,
                 unit_of_measurement,
@@ -150,6 +156,7 @@ class PidController(SensorEntity):
         hass: HomeAssistant,
         unique_id,
         name,
+        enabled,
         icon,
         set_point,
         unit_of_measurement,
@@ -167,6 +174,7 @@ class PidController(SensorEntity):
         entity_id,
     ):
         self._attr_name = name
+        self._enabled_template = enabled
         self._icon_template = icon
         self._set_point_template = set_point
         self._unit_of_measurement_template = unit_of_measurement
@@ -187,6 +195,14 @@ class PidController(SensorEntity):
         self._reset_pid = []
         self._pid = None
         self._source = entity_id
+        self._tunning = False
+        self._tunning_data = {}
+
+        self._enabled_entities = []
+        self._p_entities = []
+        self._i_entities = []
+        self._d_entities = []
+
         self._get_entities()
 
         self._attr_unique_id = (
@@ -212,6 +228,26 @@ class PidController(SensorEntity):
         return True
 
     @property
+    def enabled(self) -> bool:
+        """Enabled"""
+
+        if self._enabled_template is not None:
+            try:
+                enabled = self._enabled_template.async_render(parse_result=False)
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_ENABLED)
+                return DEFAULT_ENABLED
+
+            return bool(result_as_boolean(enabled))
+
+        return DEFAULT_ENABLED
+
+    @property
+    def tunning(self) -> bool:
+        """Returns Tunning"""
+        return self._tunning
+
+    @property
     def icon(self) -> str:
         """Returns Icon"""
         icon = DEFAULT_ICON
@@ -227,6 +263,10 @@ class PidController(SensorEntity):
     @property
     def state(self) -> StateType:
         """Return the state of the sensor."""
+
+        if not self.enabled:
+            return 0
+
         state = 0
         try:
             state = float(self._attr_state) / 100
@@ -281,7 +321,7 @@ class PidController(SensorEntity):
 
     @property
     def source(self) -> float:
-        """Returns Set Point"""
+        """Returns Response"""
 
         source_state = self.hass.states.get(self._source)
         if not source_state:
@@ -645,6 +685,15 @@ class PidController(SensorEntity):
             else:
                 self._entities += info.entities
 
+        if self._enabled_template is not None:
+            try:
+                info = self._enabled_template.async_render_to_info()
+            except (TemplateError, TypeError) as ex:
+                self.show_template_exception(ex, CONF_ENABLED)
+            else:
+                self._entities += info.entities
+                self._enabled_entities += info.entities
+
         if self._proportional_template is not None:
             try:
                 info = self._proportional_template.async_render_to_info()
@@ -652,6 +701,7 @@ class PidController(SensorEntity):
                 self.show_template_exception(ex, CONF_PROPORTIONAL)
             else:
                 self._entities += info.entities
+                self._p_entities += info.entities
 
         if self._integral_template is not None:
             try:
@@ -660,6 +710,7 @@ class PidController(SensorEntity):
                 self.show_template_exception(ex, CONF_INTEGRAL)
             else:
                 self._entities += info.entities
+                self._i_entities += info.entities
 
         if self._derivative_template is not None:
             try:
@@ -668,6 +719,7 @@ class PidController(SensorEntity):
                 self.show_template_exception(ex, CONF_DERIVATIVE)
             else:
                 self._entities += info.entities
+                self._d_entities += info.entities
 
         if self._precision_template is not None:
             try:
@@ -794,3 +846,126 @@ class PidController(SensorEntity):
                 async_track_state_change(self.hass, entity, sensor_state_listener)
 
         self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, sensor_startup)
+
+    def start_autotune(self):
+        if self.set_point == 0:
+            return
+
+        if len(self._enabled_entities) != 1:
+            return
+
+        ## Returns Entity in p/i/d
+        if len(self._p_entities) != 1:
+            return
+
+        if len(self._i_entities) != 1:
+            return
+
+        if len(self._d_entities) != 1:
+            return
+
+        if self.source > self.set_point:
+            return
+
+        self._tunning_data = {}
+
+        old_data = {"p": self.p, "i": self.i, "d": self.d, "set": self.source}
+        self._tunning_data["old_data"] = old_data
+
+        self.hass.states.set(self._enabled_entities[0], False)
+        self.hass.states.set(self._p_entities[0], 0)
+        self.hass.states.set(self._i_entities[0], 0)
+        self.hass.states.set(self._d_entities[0], 0)
+        self.reset_pid()
+
+        self._tunning_data["tunning_stage"] = "warming"
+        self._tunning_data["start_time"] = datetime.now()
+        self._tunning_data["start_feedback"] = self.source
+        self._tunning_data["stage_time"] = self._tunning_data["start_time"].timestamp
+        self._tunning_data["cross_time"] = []
+
+        self._tunning = True
+
+    def feedback_autotune(self):
+        ### http://faculty.mercer.edu/jenkins_he/documents/TuningforPIDControllers.pdf
+
+        call_time = datetime.now().timestamp
+        stage_time = self._tunning_data["stage_time"]
+        delta_stage = stage_time - call_time
+
+        delta_point = abs(self.source - self.set_point)
+
+        if not self._tunning:
+            return
+
+        if self._tunning_data["tunning_stage"] == "warming":
+            if self.source >= self.set_point:
+                self._tunning_data["cross_time"].append(delta_stage)
+                self._tunning_data["overshoot"].append(delta_point)
+                self._tunning_data["tunning_stage"] = "cooling"
+
+        elif self._tunning_data["tunning_stage"] == "cooling":
+            delta_mean = mean(self._tunning_data["overshoot"])
+            if delta_point >= delta_mean:
+                self._tunning_data["cross_time"].append(delta_stage)
+                self._tunning_data["overshoot"].append(delta_point)
+                self._tunning_data["tunning_stage"] = "warming"
+            if len(self._tunning_data["overshoot"]) >= 10:
+                self._tunning_data["tunning_stage"] = "result"
+        elif self._tunning_data["tunning_stage"] == "result":
+            self.hass.states.set(self._enabled_entities[0], False)
+            start_feedback = self._tunning_data["start_feedback"]
+            mean_overshoot = mean(self._tunning_data["overshoot"])
+            overshoot_time = self.get_time(
+                0,
+                start_feedback,
+                mean(self._tunning_data["cross_time"]),
+                mean_overshoot,
+                self.set_point,
+            )
+
+            # First Method Calculation
+            p_value = 2 * mean_overshoot
+            i_value = overshoot_time * 2
+            d_value = overshoot_time / 2
+
+            pcr_calculation = []
+
+            for ind in self._tunning_data["cross_time"]:
+                if ind == 0:
+                    continue
+                if (self._tunning_data["cross_time"][ind] % 2) == 0:
+                    pcr_value = abs(
+                        self._tunning_data["cross_time"][ind]
+                        - self._tunning_data["cross_time"][ind - 2]
+                    )
+                    pcr_calculation.append(pcr_value)
+
+            pcr_value = mean(pcr_calculation)
+
+            p_value2 = 0.6 * p_value
+            i_value2 = 0.5 * pcr_value
+            d_value2 = 0.125 * pcr_value
+
+            self._tunning_data["result"] = {"p": p_value2, "i": i_value2, "d": d_value2}
+            self.stop_autotune()
+
+        self._tunning_data["stage_time"] = call_time
+
+    def stop_autotune(self):
+        self.hass.states.set(self._enabled_entities[0], True)
+        self.reset_pid()
+        self._tunning = False
+        self._tunning_data = {}
+
+    def get_time(self, stat_time, start_temp, end_time, end_temperature, target):
+        m, c = self.line_equation(stat_time, start_temp, end_time, end_temperature)
+        return (target - c) / m
+
+    def line_equation(self, x1, y1, x2, y2):
+        """y = {m}x + {c}"""
+        points = [(x1, y1), (x2, y2)]
+        x_coords, y_coords = zip(*points)
+        a = vstack([x_coords, ones(len(x_coords))]).T
+        m, c = lstsq(a, y_coords)[0]
+        return m, c
