@@ -207,7 +207,8 @@ You can look at the attributes of the sensor to the p|i|d variables, that should
 The PID standard behavior is to output the power that would be needed to raise the reported value to reach the set point. But if you need the inverted behavior, like a cooling system, that the rise of the output would lower the reported value, until it reaches the set point. To do this you can set _invert: yes_.
 # References
 - How to tune PID Loops: https://www.crossco.com/resources/technical/how-to-tune-pid-loops/
-
+# I just love coffee and beer
+[![buy_coffee]](https://www.buymeacoffee.com/soloam)
 
 ***
 [gh_last_commit]: https://img.shields.io/github/last-commit/soloam/ha-pid-controller
@@ -216,3 +217,4 @@ The PID standard behavior is to output the power that would be needed to raise t
 [pid_phase2]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase2.png
 [pid_phase3]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase3.png
 [pid_phase4]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase4.png
+[buy_coffee]: https://www.buymeacoffee.com/assets/img/custom_images/white_img.png
