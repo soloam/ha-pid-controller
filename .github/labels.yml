@@ -1,0 +1,51 @@
+- name: breaking_change
+  description: Breaking Change
+  color: f44336
+
+- name: bug
+  description: Something isn't working
+  color: f9877f
+
+- name: fix
+  description: Something isn't working
+  color: f9877f
+
+- name: bugfix
+  description: Something isn't working
+  color: f9877f
+
+- name: feature
+  description: New feature or request
+  color: a2eeef
+
+- name: enhancement
+  description: New feature or request
+  color: a2eeef
+
+- name: documentation
+  description: Improvements or additions to documentation
+  color: 0075ca
+
+- name: dependencies
+  description: Pull requests that update a dependency file
+  color: 0366d6
+
+- name: github structure
+  description: Pull requests that update Github actions/workflow code
+  color: "000000"
+
+- name: help wanted
+  description: Extra attention is needed
+  color: 008672
+
+- name: major
+  description: Major changes. Used for release bump
+  color: 16970B
+
+- name: minor
+  description: Minor changes. Used for release bump
+  color: 16970B
+
+- name: patch
+  description: Patch changes. Used for release bump
+  color: 16970B
