@@ -2,9 +2,9 @@
 
 A PID Controller allows you to target a set value and achieve that setting in a smoothly and mantinin it without fluctuations
 
-[![gh_release](https://img.shields.io/github/v/release/soloam/ha-pid-controller)](../../releases)
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
-[![gh_last_commit]](../../commits/master)
+[![gh_release](https://img.shields.io/github/v/release/soloam/ha-pid-controller)](../../releases) [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration) [![gh_last_commit]](../../commits/master) [![buy_coffee_badge]](#i-just-love-coffee-and-beer)
+
+
 ![PID Graph][pid_graph]
 
 
@@ -218,3 +218,4 @@ The PID standard behavior is to output the power that would be needed to raise t
 [pid_phase3]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase3.png
 [pid_phase4]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase4.png
 [buy_coffee]: https://www.buymeacoffee.com/assets/img/custom_images/white_img.png
+[buy_coffee_badge]: https://img.shields.io/badge/Buy%20me%20a%20coffee-%F0%9F%8D%BA-lightgrey
