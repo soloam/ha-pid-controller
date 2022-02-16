@@ -2,9 +2,9 @@
 
 A PID Controller allows you to target a set value and achieve that setting in a smoothly and mantinin it without fluctuations
 
-[![gh_release](https://img.shields.io/github/v/release/soloam/ha-pid-controller)](../../releases)
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
-[![gh_last_commit]](../../commits/master)
+[![gh_release](https://img.shields.io/github/v/release/soloam/ha-pid-controller)](../../releases) [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration) [![gh_last_commit]](../../commits/master) [![buy_coffee_badge]](#i-just-love-coffee-and-beer)
+
+
 ![PID Graph][pid_graph]
 
 
@@ -159,6 +159,8 @@ input_number:
 **windup** _(number/template) (Optional: Default 0)_ The maximum value to increment in the integral portion of the PID, check _Calibrate the PID_ section for more information (Ex. 5)
 
 **p/i/d** _(number/template) (Optional: Default 0)_ The PID calibration values , check _Calibrate the PID_ section to more information
+
+**unit_of_measurement** _(string/template) (Optional: Default points)_ The unit of measurement of the sensor
 # Calibrate the PID
 For this I'm gonna use a practical example on calibrating the PID to be used as a thermostat to a climate system. Warming a room
 The PID is calibrated using the p|i|d variables.
@@ -205,7 +207,8 @@ You can look at the attributes of the sensor to the p|i|d variables, that should
 The PID standard behavior is to output the power that would be needed to raise the reported value to reach the set point. But if you need the inverted behavior, like a cooling system, that the rise of the output would lower the reported value, until it reaches the set point. To do this you can set _invert: yes_.
 # References
 - How to tune PID Loops: https://www.crossco.com/resources/technical/how-to-tune-pid-loops/
-
+# I just love coffee and beer
+[![buy_coffee]](https://www.buymeacoffee.com/soloam)
 
 ***
 [gh_last_commit]: https://img.shields.io/github/last-commit/soloam/ha-pid-controller
@@ -214,3 +217,5 @@ The PID standard behavior is to output the power that would be needed to raise t
 [pid_phase2]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase2.png
 [pid_phase3]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase3.png
 [pid_phase4]: https://raw.githubusercontent.com/soloam/ha-pid-controller/master/resources/pip_phase4.png
+[buy_coffee]: https://www.buymeacoffee.com/assets/img/custom_images/white_img.png
+[buy_coffee_badge]: https://img.shields.io/badge/Buy%20me%20a%20coffee-%F0%9F%8D%BA-lightgrey
