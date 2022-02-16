@@ -12,12 +12,11 @@ https://github.com/soloam/ha-pid-controller/
 from datetime import datetime
 import logging
 from math import floor, ceil
-from tkinter import Y
 from typing import Any, Mapping, Optional
-
-from numpy import ones, vstack
-from numpy.linalg import lstsq
 from statistics import mean
+
+from decimal import Decimal
+
 
 import voluptuous as vol
 from _sha1 import sha1
@@ -33,6 +32,8 @@ from homeassistant.const import (
     CONF_MAXIMUM,
     CONF_UNIT_OF_MEASUREMENT,
     CONF_DEVICE_CLASS,
+    STATE_ON,
+    STATE_OFF,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import TemplateError
@@ -792,6 +793,8 @@ class PidController(SensorEntity):
             self._attr_state = 0 if self.invert else 100
             if source >= set_point:
                 self._attr_state = 100 if self.invert else 0
+            if self._tunning:
+                self.feedback_autotune()
         else:
             if self._pid is None:
                 self._pid = PID(self.proportional, self.integral, self.derivative)
@@ -814,6 +817,8 @@ class PidController(SensorEntity):
                 self._pid.set_point = set_point
 
             self._pid.update(source)
+            if self._tunning:
+                self.feedback_autotune()
 
             output = float(self._pid.output)
 
@@ -872,31 +877,33 @@ class PidController(SensorEntity):
         old_data = {"p": self.p, "i": self.i, "d": self.d, "set": self.source}
         self._tunning_data["old_data"] = old_data
 
-        self.hass.states.set(self._enabled_entities[0], False)
-        self.hass.states.set(self._p_entities[0], 0)
-        self.hass.states.set(self._i_entities[0], 0)
-        self.hass.states.set(self._d_entities[0], 0)
+        self.update_entity(self._enabled_entities[0], STATE_OFF)
+        self.update_entity(self._p_entities[0], 0)
+        self.update_entity(self._i_entities[0], 0)
+        self.update_entity(self._d_entities[0], 0)
         self.reset_pid()
 
         self._tunning_data["tunning_stage"] = "warming"
         self._tunning_data["start_time"] = datetime.now()
         self._tunning_data["start_feedback"] = self.source
-        self._tunning_data["stage_time"] = self._tunning_data["start_time"].timestamp
+        self._tunning_data["stage_time"] = self._tunning_data["start_time"].timestamp()
         self._tunning_data["cross_time"] = []
+        self._tunning_data["overshoot"] = []
+
+        self.hass.states.async_set(self._enabled_entities[0], STATE_ON)
 
         self._tunning = True
 
     def feedback_autotune(self):
         ### http://faculty.mercer.edu/jenkins_he/documents/TuningforPIDControllers.pdf
 
-        call_time = datetime.now().timestamp
-        stage_time = self._tunning_data["stage_time"]
-        delta_stage = stage_time - call_time
-
-        delta_point = abs(self.source - self.set_point)
-
         if not self._tunning:
             return
+
+        call_time = datetime.now().timestamp()
+        stage_time = self._tunning_data["stage_time"]
+        delta_stage = abs(call_time - stage_time)
+        delta_point = abs(self.source - self.set_point)
 
         if self._tunning_data["tunning_stage"] == "warming":
             if self.source >= self.set_point:
@@ -906,14 +913,16 @@ class PidController(SensorEntity):
 
         elif self._tunning_data["tunning_stage"] == "cooling":
             delta_mean = mean(self._tunning_data["overshoot"])
-            if delta_point >= delta_mean:
+            target_cooling = self.set_point - delta_mean
+            if self.source <= target_cooling:
                 self._tunning_data["cross_time"].append(delta_stage)
                 self._tunning_data["overshoot"].append(delta_point)
                 self._tunning_data["tunning_stage"] = "warming"
-            if len(self._tunning_data["overshoot"]) >= 10:
+            if len(self._tunning_data["overshoot"]) >= 4:
                 self._tunning_data["tunning_stage"] = "result"
+
         elif self._tunning_data["tunning_stage"] == "result":
-            self.hass.states.set(self._enabled_entities[0], False)
+            self.hass.states.async_set(self._enabled_entities[0], STATE_OFF)
             start_feedback = self._tunning_data["start_feedback"]
             mean_overshoot = mean(self._tunning_data["overshoot"])
             overshoot_time = self.get_time(
@@ -931,14 +940,11 @@ class PidController(SensorEntity):
 
             pcr_calculation = []
 
-            for ind in self._tunning_data["cross_time"]:
-                if ind == 0:
+            for inx, val in enumerate(self._tunning_data["cross_time"]):
+                if inx == 0:
                     continue
-                if (self._tunning_data["cross_time"][ind] % 2) == 0:
-                    pcr_value = abs(
-                        self._tunning_data["cross_time"][ind]
-                        - self._tunning_data["cross_time"][ind - 2]
-                    )
+                if (inx % 2) == 0:
+                    pcr_value = abs(val - self._tunning_data["cross_time"][inx - 2])
                     pcr_calculation.append(pcr_value)
 
             pcr_value = mean(pcr_calculation)
@@ -953,10 +959,22 @@ class PidController(SensorEntity):
         self._tunning_data["stage_time"] = call_time
 
     def stop_autotune(self):
-        self.hass.states.set(self._enabled_entities[0], True)
+        self.update_entity(self._enabled_entities[0], STATE_ON)
         self.reset_pid()
+
+        if self._tunning_data["result"]:
+            self.update_entity(self._p_entities[0], self._tunning_data["result"]["p"])
+            self.update_entity(self._i_entities[0], self._tunning_data["result"]["i"])
+            self.update_entity(self._d_entities[0], self._tunning_data["result"]["d"])
+
         self._tunning = False
         self._tunning_data = {}
+
+    def update_entity(self, entity_id, state):
+        entity = self.hass.states.get(entity_id)
+        if not entity:
+            return
+        self.hass.states.async_set(entity_id, state, entity.attributes)
 
     def get_time(self, stat_time, start_temp, end_time, end_temperature, target):
         m, c = self.line_equation(stat_time, start_temp, end_time, end_temperature)
@@ -964,8 +982,6 @@ class PidController(SensorEntity):
 
     def line_equation(self, x1, y1, x2, y2):
         """y = {m}x + {c}"""
-        points = [(x1, y1), (x2, y2)]
-        x_coords, y_coords = zip(*points)
-        a = vstack([x_coords, ones(len(x_coords))]).T
-        m, c = lstsq(a, y_coords)[0]
+        m = (y2 - y1) / (x2 - x1)
+        c = y2 - (m * x2)
         return m, c

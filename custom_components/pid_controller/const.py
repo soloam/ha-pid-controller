@@ -16,6 +16,7 @@ VERSION = "1.0.0"
 # Services
 COMPONENT_SERVICES = "pid-services"
 SERVICE_RESET_PID = "reset_pid"
+SERVICE_AUTOTUNE = "autotune_pid"
 
 # Configuration
 CONF_SETPOINT = "set_point"

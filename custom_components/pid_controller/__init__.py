@@ -50,6 +50,18 @@ async def async_setup(hass: HomeAssistant, config):
         schema=SERVICE_SCHEMA,
     )
 
+    async def async_pid_service_autotune(call) -> None:
+        """Call pid service handler."""
+        _LOGGER.info("%s service called", call.service)
+        await pid_autotune_service(hass, call)
+
+    hass.services.async_register(
+        COMPONENT_DOMAIN,
+        SERVICE_AUTOTUNE,
+        async_pid_service_autotune,
+        schema=SERVICE_SCHEMA,
+    )
+
     return True
 
 
@@ -73,5 +85,17 @@ async def pid_reset_service(hass: HomeAssistant, call):
 
     try:
         get_entity_from_domain(hass, domain, entity_id).reset_pid()
+    except AttributeError:
+        raise HomeAssistantError(f"{entity_id} can't reset PID") from AttributeError
+
+
+async def pid_autotune_service(hass: HomeAssistant, call):
+    entity_id = call.data["entity_id"]
+    domain = entity_id.split(".")[0]
+
+    _LOGGER.info("%s autotune pid", entity_id)
+
+    try:
+        get_entity_from_domain(hass, domain, entity_id).start_autotune()
     except AttributeError:
         raise HomeAssistantError(f"{entity_id} can't reset PID") from AttributeError

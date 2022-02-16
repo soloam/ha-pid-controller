@@ -10,3 +10,10 @@ reset_pid:
     entity_id:
       description: Name(s) of entities to reset
       example: 'sensor.temperture_controller'
+
+autotune_pid:
+  description: Autotune a PID Controller
+  fields:
+    entity_id:
+      description: Name(s) of entities to tune
+      example: 'sensor.temperture_controller'
