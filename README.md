@@ -39,6 +39,7 @@ pid_controller:
 sensor:
   - platform: pid_controller
     name: hello
+    enabled: '{{ states("input_boolean.enabled") }}'
     set_point: '{{ states("input_number.set_point") }}'
     p: '{{ states("input_number.proportional") }}'
     i: '{{ states("input_number.integral") }}'
@@ -56,6 +57,8 @@ input_boolean:
   invert:
     name: Invert
     initial: no
+  enabled:
+    name: Enabled
 
 input_select:
   round:
@@ -105,21 +108,21 @@ input_number:
     name: Proportional
     initial: 0
     min: 0
-    max: 20
+    max: 1
     step: 0.01
 
   integral:
     name: Integral
     initial: 0
     min: 0
-    max: 20
+    max: 1
     step: 0.01
 
   derivative:
     name: Derivative
     initial: 0
     min: 0
-    max: 20
+    max: 1
     step: 0.01
 
   precision:
@@ -150,6 +153,8 @@ input_number:
 
 **sample_time**: _(number/template) (Optional: Default 0)_ The time in seconds between samples to accept into the calculations of the PID (Ex. 30)
 
+**enabled**: _(boolean/template) (Optional: Default yes)_ If the pid is enabled (Ex. yes)
+
 **invert**: _(boolean/template) (Optional: Default no)_ If the pid should be Inverted, check _invert pid_ section for more information (Ex. no)
 
 **minimum** _(number/template) (Optional: Default 0)_ The minimum output of the PID (Ex. 18°C)
@@ -158,7 +163,7 @@ input_number:
 
 **windup** _(number/template) (Optional: Default 0)_ The maximum value to increment in the integral portion of the PID, check _Calibrate the PID_ section for more information (Ex. 5)
 
-**p/i/d** _(number/template) (Optional: Default 0)_ The PID calibration values , check _Calibrate the PID_ section to more information
+**p/i/d** _(number/template) (Optional: Default 0)_ The PID calibration values (value 0-1) , check _Calibrate the PID_ section to more information
 
 **unit_of_measurement** _(string/template) (Optional: Default points)_ The unit of measurement of the sensor
 # Calibrate the PID

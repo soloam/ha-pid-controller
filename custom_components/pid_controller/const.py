@@ -16,6 +16,7 @@ VERSION = "1.0.0"
 # Services
 COMPONENT_SERVICES = "pid-services"
 SERVICE_RESET_PID = "reset_pid"
+SERVICE_AUTOTUNE = "autotune_pid"
 
 # Configuration
 CONF_SETPOINT = "set_point"
@@ -27,6 +28,7 @@ CONF_PRECISION = "precision"
 CONF_ROUND = "round"
 CONF_SAMPLE_TIME = "sample_time"
 CONF_WINDUP = "windup"
+CONF_ENABLED = "enabled"
 
 # Default
 DEFAULT_NAME = "PID Controller"
@@ -39,6 +41,7 @@ DEFAULT_WINDUP = 20
 DEFAULT_UNIT_OF_MEASUREMENT = "points"
 DEFAULT_DEVICE_CLASS = "None"
 DEFAULT_ICON = "mdi:chart-bell-curve-cumulative"
+DEFAULT_ENABLED = True
 
 # Other
 ROUND_FLOOR = "floor"
@@ -46,6 +49,8 @@ ROUND_CEIL = "ceil"
 ROUND_ROUND = "round"
 
 # Attributes
+ATTR_ENABLED = "enabled"
+ATTR_TUNNING = "tunning"
 ATTR_ICON = "icon"
 ATTR_UNIT_OF_MEASUREMENT = "unit_of_measuremnt"
 ATTR_DEVICE_CLASS = "device_class"
@@ -65,6 +70,8 @@ ATTR_I = "i"
 ATTR_D = "d"
 
 ATTR_TO_PROPERTY = [
+    ATTR_ENABLED,
+    ATTR_TUNNING,
     ATTR_ICON,
     ATTR_UNIT_OF_MEASUREMENT,
     ATTR_DEVICE_CLASS,

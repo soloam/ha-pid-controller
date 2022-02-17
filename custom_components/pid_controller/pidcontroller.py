@@ -10,117 +10,117 @@ https://github.com/soloam/ha-pid-controller/
 """
 import time
 
+# pylint: disable=invalid-name
+
 
 class PIDController:
     """PID Controller"""
 
-    def __init__(self, P=0.2, I=0.0, D=0.0, current_time=None):
-        self._p = 0
-        self._i = 0
-        self._d = 0
+    WARMUP_STAGE = 3
+
+    def __init__(self, P=0.2, I=0.0, D=0.0, logger=None):
+        self._logger = logger
+
+        self._set_point = 0
+        self._windup = (None, None)
+        self._output = 0.0
 
         self._kp = P
         self._ki = I
         self._kd = D
 
-        self._sample_time = 0.00
-        self._current_time = current_time if current_time is not None else time.time()
-        self._last_time = self._current_time
-
-        self._p_term = 0
-        self._i_term = 0
-        self._d_term = 0
-
-        self._output = 0
-
-        self._windup = 0
-
-        self._last_error = 0
-
-        self.reset()
-
-    def reset(self):
-        self._set_point = 0.0
-
-        self._p = 0
-        self._i = 0
-        self._d = 0
-
         self._p_term = 0.0
         self._i_term = 0.0
         self._d_term = 0.0
-        self._last_error = 0.0
 
-        # Windup Guard
-        self._windup = 20.0
+        self._sample_time = None
+        self._last_output = None
+        self._last_input = None
+        self._last_time = None
 
-        self._output = 0.0
+        self.reset_pid()
 
     def reset_pid(self):
-        self._p_term = 0
-        self._i_term = 0
-        self._d_term = 0
+        self._p_term = 0.0
+        self._i_term = 0.0
+        self._d_term = 0.0
 
-        self._last_error = 0
-        self._last_time = 0
+        self._sample_time = None
+        self._last_output = None
+        self._last_input = None
+        self._last_time = None
 
-    def update(self, feedback_value, current_time=None):
+    def update(self, feedback_value, in_time=None):
         """Calculates PID value for given reference feedback"""
+
+        current_time = in_time if in_time is not None else self.current_time()
+        if self._last_time is None:
+            self._last_time = current_time
+
+        # Fill PID information
+        delta_time = current_time - self._last_time
+        if not delta_time:
+            delta_time = 1e-16
+        elif delta_time < 0:
+            return
+
+        # Return last output if sample time not met
+        if (
+            self._sample_time is not None
+            and self._last_output is not None
+            and delta_time < self._sample_time
+        ):
+            return self._last_output
+
+        # Calculate error
         error = self._set_point - feedback_value
 
-        self._current_time = current_time if current_time is not None else time.time()
-        delta_time = self._current_time - self._last_time
-        delta_error = error - self._last_error
+        # Calculate delta Input
+        delta_input = feedback_value - (
+            self._last_input if self._last_input is not None else feedback_value
+        )
 
-        if delta_time >= self._sample_time:
-            self._p_term = self._kp * error
-            self._i_term += error * delta_time
+        # Calculate  terms
+        self._p_term = self._kp * error
+        self._i_term += self._ki * error * delta_time
+        self._i_term = self.clamp_value(self._i_term, self._windup)
+        self._d_term = self._kd * delta_input / delta_time
 
-            if self._i_term < -self._windup:
-                self._i_term = -self._windup
-            elif self._i_term > self._windup:
-                self._i_term = self._windup
+        # Compute final output
+        self._output = self._p_term + self._i_term + self._d_term
+        self._output = self.clamp_value(self._output, (0, 100))
 
-            self._d_term = 0.0
-            if delta_time > 0:
-                self._d_term = delta_error / delta_time
-
-            # Remember last time and last error for next calculation
-            self._last_time = self._current_time
-            self._last_error = error
-
-            self._p = self._p_term
-            self._i = self._ki * self._i_term
-            self._d = self._kd * self._d_term
-
-            self._output = self._p + self._i + self._d
+        # Keep Track
+        self._last_output = self._output
+        self._last_input = feedback_value
+        self._last_time = current_time
 
     @property
-    def kpg(self):
+    def kp(self):
         """Aggressively the PID reacts to the current error with setting Proportional Gain"""
         return self._kp
 
-    @kpg.setter
-    def kpg(self, value):
+    @kp.setter
+    def kp(self, value):
         self._kp = value
 
     @property
-    def kig(self):
+    def ki(self):
         """Aggressively the PID reacts to the current error with setting Integral Gain"""
         return self._ki
 
-    @kig.setter
-    def kig(self, value):
+    @ki.setter
+    def ki(self, value):
         self._ki = value
 
     @property
-    def kdg(self):
+    def kd(self):
         """Determines how aggressively the PID reacts to the current
         error with setting Derivative Gain"""
         return self._kd
 
-    @kdg.setter
-    def kdg(self, value):
+    @kd.setter
+    def kd(self, value):
         self._kd = value
 
     @property
@@ -147,7 +147,7 @@ class PIDController:
 
     @windup.setter
     def windup(self, value):
-        self._windup = value
+        self._windup = (-value, value)
 
     @property
     def sample_time(self):
@@ -162,18 +162,44 @@ class PIDController:
         self._sample_time = value
 
     @property
-    def p(self):  # pylint: disable=invalid-name
-        return self._p
+    def p(self):
+        return self._p_term
 
     @property
     def i(self):
-        return self._i
+        return self._i_term
 
     @property
-    def d(self):  # pylint: disable=invalid-name
-        return self._d
+    def d(self):
+        return self._d_term
 
     @property
     def output(self):
         """PID result"""
         return self._output
+
+    def log(self, message):
+        if not self._logger:
+            return
+        self._logger.warning(message)
+
+    def current_time(self):
+        try:
+            ret_time = time.monotonic()
+        except AttributeError:
+            ret_time = time.time()
+
+        return ret_time
+
+    def clamp_value(self, value, limits):
+        lower, upper = limits
+
+        if value is None:
+            return None
+        elif not lower and not upper:
+            return value
+        elif (upper is not None) and (value > upper):
+            return upper
+        elif (lower is not None) and (value < lower):
+            return lower
+        return value
