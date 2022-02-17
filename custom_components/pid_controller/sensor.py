@@ -10,11 +10,9 @@ https://github.com/soloam/ha-pid-controller/
 """
 from __future__ import annotations
 
-from datetime import datetime
 import logging
 from math import floor, ceil
 from typing import Any, Mapping, Optional
-from statistics import mean
 
 import voluptuous as vol
 from _sha1 import sha1
@@ -30,8 +28,6 @@ from homeassistant.const import (
     CONF_MAXIMUM,
     CONF_UNIT_OF_MEASUREMENT,
     CONF_DEVICE_CLASS,
-    STATE_ON,
-    STATE_OFF,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import TemplateError
@@ -770,9 +766,6 @@ class PidController(SensorEntity):
             self._sensor_state = 0
             return
 
-        if not self.updating_queue_lock():
-            return
-
         source = self.source
         set_point = self.set_point
 
@@ -816,8 +809,6 @@ class PidController(SensorEntity):
             output = max(min(output, 100), 0)
             self._sensor_state = output
 
-        self.updating_queue_unlock()
-
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
 
@@ -829,9 +820,6 @@ class PidController(SensorEntity):
             self._update_sensor(entity=entity)
             if last_state != self.state or entity in self._force_update:
                 self.async_schedule_update_ha_state(True)
-
-            if entity == self._source:
-                self.feedback_autotune()
 
         # pylint: disable=unused-argument
         @callback
@@ -848,228 +836,8 @@ class PidController(SensorEntity):
 
         self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, sensor_startup)
 
-    def start_autotune(self):
-        if self.set_point == 0:
-            return
-
-        if len(self._enabled_entities) != 1:
-            return
-
-        ## Returns Entity in p/i/d
-        if len(self._p_entities) != 1:
-            return
-
-        if len(self._i_entities) != 1:
-            return
-
-        if len(self._d_entities) != 1:
-            return
-
-        if self.source > self.set_point:
-            return
-
-        if self._tunning_data:
-            return
-
-        self._tunning_data = {}
-        self._tunning_data["tunning_stage"] = "warming"
-
-        old_data = {"p": self.p, "i": self.i, "d": self.d, "set": self.source}
-        self._tunning_data["old_data"] = old_data
-
-        self.update_entity(self._enabled_entities[0], STATE_OFF)
-
-        self._tunning_data["prop_calculation"] = 0.25
-        self._tunning_data["prop_tester"] = 0
-        self._tunning_data["last_overshoot_count"] = 0
-        self.update_entity(self._p_entities[0], self._tunning_data["prop_calculation"])
-        self.update_entity(self._i_entities[0], 0)
-        self.update_entity(self._d_entities[0], 0)
-        self.reset_pid()
-
-        self._tunning_data["start_time"] = datetime.now()
-        self._tunning_data["start_feedback"] = self.source
-        self._tunning_data["stage_time"] = self._tunning_data["start_time"].timestamp()
-        self._tunning_data["cross_time"] = []
-        self._tunning_data["overshoot"] = []
-        self._tunning_data["overshoot_time"] = []
-
-        self.hass.states.async_set(self._enabled_entities[0], STATE_ON)
-
-        self._tunning = True
-        self.autotune_queue_unlock()
-
-    def feedback_autotune(self):
-        ### http://faculty.mercer.edu/jenkins_he/documents/TuningforPIDControllers.pdf
-
-        if not self.autotune_queue_lock():
-            return
-
-        feedback_point = self.source
-        set_point = self.set_point
-
-        call_time = datetime.now().timestamp()
-        stage_time = self._tunning_data["stage_time"]
-        delta_stage_time = abs(call_time - stage_time)
-        delta_point = abs(feedback_point - set_point)
-
-        if self._tunning_data["tunning_stage"] == "warming":
-            if feedback_point >= set_point:
-
-                if "tunning_last_point_time" in self._tunning_data:
-                    cross_time = self.get_time(
-                        self._tunning_data["tunning_last_point_time"],
-                        self._tunning_data["tunning_last_point"],
-                        delta_stage_time,
-                        feedback_point,
-                        set_point,
-                    )
-                    self._tunning_data["cross_time"].append(cross_time)
-
-                self._tunning_data["overshoot"].append(delta_point)
-                self._tunning_data["overshoot_time"].append(call_time)
-                self._tunning_data["tunning_stage"] = "cooling"
-
-                if "tunning_last_point_time" in self._tunning_data:
-                    del self._tunning_data["tunning_last_point_time"]
-
-                if "tunning_last_point" in self._tunning_data:
-                    del self._tunning_data["tunning_last_point"]
-            else:
-                self._tunning_data["tunning_last_point_time"] = delta_stage_time
-                self._tunning_data["tunning_last_point"] = feedback_point
-
-        elif self._tunning_data["tunning_stage"] == "cooling":
-            if feedback_point <= set_point:
-                if "tunning_last_point_time" in self._tunning_data:
-                    cross_time = self.get_time(
-                        self._tunning_data["tunning_last_point_time"],
-                        self._tunning_data["tunning_last_point"],
-                        delta_stage_time,
-                        feedback_point,
-                        set_point,
-                    )
-                    self._tunning_data["cross_time"].append(cross_time)
-
-                self._tunning_data["tunning_stage"] = "warming"
-
-                if "tunning_last_point_time" in self._tunning_data:
-                    del self._tunning_data["tunning_last_point_time"]
-
-                if "tunning_last_point" in self._tunning_data:
-                    del self._tunning_data["tunning_last_point"]
-            else:
-                self._tunning_data["tunning_last_point_time"] = delta_stage_time
-                self._tunning_data["tunning_last_point"] = feedback_point
-
-            if len(self._tunning_data["overshoot_time"]) >= 10:
-                self._tunning_data["tunning_stage"] = "result"
-
-        elif self._tunning_data["tunning_stage"] == "result":
-            self.update_entity(self._enabled_entities[0], STATE_OFF)
-            # start_feedback = self._tunning_data["start_feedback"]
-            # mean_overshoot = mean(self._tunning_data["overshoot"])
-            # overshoot_time = mean(self._tunning_data["cross_time"])
-
-            # First Method Calculation
-            p_value = self._tunning_data["prop_calculation"]  # 2 * mean_overshoot
-            # i_value = overshoot_time * 2
-            # d_value = overshoot_time / 2
-
-            pcr_calculation = []
-
-            for inx, val in enumerate(self._tunning_data["overshoot_time"]):
-                if inx == 0:
-                    continue
-                # if (inx % 2) != 0:
-                pcr_value = abs(val - self._tunning_data["overshoot_time"][inx - 1])
-                pcr_calculation.append(pcr_value)
-
-            pcr_value = mean(pcr_calculation)
-
-            p_value2 = 0.6 * p_value
-            i_value2 = (0.5 * pcr_value) / 100
-            d_value2 = (0.125 * pcr_value) / 100
-
-            self._tunning_data["result"] = {"p": p_value2, "i": i_value2, "d": d_value2}
-            self.autotune_queue_unlock()
-            self.stop_autotune()
-            return
-
-        overshoot_count = len(self._tunning_data["overshoot_time"])
-        prop_tester = self._tunning_data["prop_tester"]
-
-        _LOGGER.warning(f"Calculation {overshoot_count} tester {prop_tester}")
-
-        if self._tunning_data["last_overshoot_count"] == overshoot_count:
-            self._tunning_data["prop_tester"] += 1
-
-        # if self._tunning_data["prop_tester"] > 10:
-        #     self._tunning_data["prop_tester"] = 0
-        #     self._tunning_data["prop_calculation"] += 0.10
-        #     self.update_entity(
-        #         self._p_entities[0], self._tunning_data["prop_calculation"]
-        #     )
-
-        self._tunning_data["last_overshoot_count"] = overshoot_count
-        self._tunning_data["stage_time"] = call_time
-        self.autotune_queue_unlock()
-
-    def stop_autotune(self):
-        if not self.autotune_queue_lock():
-            return
-
-        self.update_entity(self._enabled_entities[0], STATE_ON)
-        self.reset_pid()
-
-        if self._tunning_data["result"]:
-            self.update_entity(self._p_entities[0], self._tunning_data["result"]["p"])
-            self.update_entity(self._i_entities[0], self._tunning_data["result"]["i"])
-            self.update_entity(self._d_entities[0], self._tunning_data["result"]["d"])
-
-        self._tunning = False
-        self._tunning_data = {}
-
-        self.autotune_queue_unlock()
-
     def update_entity(self, entity_id, state):
         entity = self.hass.states.get(entity_id)
         if not entity:
             return
         self.hass.states.async_set(entity_id, state, entity.attributes)
-
-    def get_time(self, stat_time, start_temp, end_time, end_temperature, target):
-        m, c = self.line_equation(stat_time, start_temp, end_time, end_temperature)
-        return (target - c) / m
-
-    def line_equation(self, x1, y1, x2, y2):
-        """y = {m}x + {c}"""
-        m = (y2 - y1) / (x2 - x1)
-        c = y2 - (m * x2)
-        return m, c
-
-    def autotune_queue_lock(self):
-        if not self._tunning:
-            self._tunnig_calculating = False
-            return
-
-        if self._tunnig_calculating:
-            return False
-
-        self._tunnig_calculating = True
-        return True
-
-    def autotune_queue_unlock(self):
-        self._tunnig_calculating = False
-        return True
-
-    def updating_queue_lock(self):
-        if self._updating:
-            return False
-
-        self._updating = True
-        return True
-
-    def updating_queue_unlock(self):
-        self._updating = False
-        return True
