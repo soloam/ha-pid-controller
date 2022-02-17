@@ -8,15 +8,13 @@ PID Controller.
 For more details about this sensor, please refer to the documentation at
 https://github.com/soloam/ha-pid-controller/
 """
+from __future__ import annotations
 
 from datetime import datetime
 import logging
 from math import floor, ceil
 from typing import Any, Mapping, Optional
 from statistics import mean
-
-from decimal import Decimal
-
 
 import voluptuous as vol
 from _sha1 import sha1
@@ -40,7 +38,6 @@ from homeassistant.exceptions import TemplateError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.event import async_track_state_change
-from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.template import result_as_boolean
 
 # pylint: disable=wildcard-import, unused-wildcard-import
@@ -69,10 +66,9 @@ PLATFORM_SCHEMA = vol.All(
             vol.Optional(CONF_ROUND, default=DEFAULT_ROUND): cv.template,
             vol.Optional(CONF_SAMPLE_TIME, default=DEFAULT_SAMPLE_TIME): cv.template,
             vol.Optional(CONF_WINDUP, default=DEFAULT_WINDUP): cv.template,
-            vol.Optional(CONF_WINDUP, default=DEFAULT_WINDUP): cv.template,
             vol.Optional(
                 CONF_UNIT_OF_MEASUREMENT, default=DEFAULT_UNIT_OF_MEASUREMENT
-            ): cv.template,
+            ): cv.string,
             vol.Optional(CONF_DEVICE_CLASS, default=DEFAULT_DEVICE_CLASS): cv.template,
         }
     )
@@ -96,7 +92,6 @@ async def async_setup_platform(
     round_type = config.get(CONF_ROUND)
     sample_time = config.get(CONF_SAMPLE_TIME)
     windup = config.get(CONF_WINDUP)
-    unit_of_measurement = config.get(CONF_UNIT_OF_MEASUREMENT)
     device_class = config.get(CONF_DEVICE_CLASS)
 
     ## Process Templates.
@@ -114,7 +109,6 @@ async def async_setup_platform(
         minimum,
         maximum,
         round_type,
-        unit_of_measurement,
         device_class,
     ]:
         if template is not None:
@@ -130,7 +124,7 @@ async def async_setup_platform(
                 enabled,
                 icon,
                 set_point,
-                unit_of_measurement,
+                config.get(CONF_UNIT_OF_MEASUREMENT),
                 device_class,
                 sample_time,
                 windup,
@@ -174,15 +168,17 @@ class PidController(SensorEntity):
         precision,
         entity_id,
     ):
+
         self._attr_name = name
+        self._attr_native_unit_of_measurement = unit_of_measurement
+
         self._enabled_template = enabled
         self._icon_template = icon
         self._set_point_template = set_point
-        self._unit_of_measurement_template = unit_of_measurement
         self._device_class_template = device_class
         self._sample_time_template = sample_time
         self._windup_template = windup
-        self._attr_state = 0
+        self._sensor_state = 0
         self._proportional_template = proportional
         self._integral_template = integral
         self._derivative_template = derivative
@@ -194,9 +190,12 @@ class PidController(SensorEntity):
         self._entities = []
         self._force_update = []
         self._reset_pid = []
+        self._feedback_pid = []
         self._pid = None
         self._source = entity_id
         self._tunning = False
+        self._updating = False
+        self._tunnig_calculating = False
         self._tunning_data = {}
 
         self._enabled_entities = []
@@ -224,6 +223,39 @@ class PidController(SensorEntity):
         )
 
     @property
+    def native_value(self):
+        """Return the state of the sensor."""
+
+        if not self.enabled:
+            return self.minimum
+
+        state = 0
+        try:
+            state = float(self._sensor_state) / 100
+        except ValueError:
+            state = 0
+
+        if self.minimum > self.maximum:
+            state = 0
+
+        units = self.units * state
+        state = self.minimum + units
+
+        precision = pow(10, self.precision)
+
+        if self.round == ROUND_FLOOR:
+            state = floor(state * precision) / precision
+        elif self.round == ROUND_CEIL:
+            state = ceil(state * precision) / precision
+        else:
+            state = round(state, self.precision)
+
+        if self.precision == 0:
+            state = int(state)
+
+        return state if self.available else STATE_UNAVAILABLE
+
+    @property
     def available(self) -> bool:
         """Return True if entity is available."""
         return True
@@ -249,7 +281,7 @@ class PidController(SensorEntity):
         return self._tunning
 
     @property
-    def icon(self) -> str:
+    def icon(self) -> str | None:
         """Returns Icon"""
         icon = DEFAULT_ICON
         if self._icon_template is not None:
@@ -262,44 +294,15 @@ class PidController(SensorEntity):
         return icon
 
     @property
-    def state(self) -> StateType:
-        """Return the state of the sensor."""
-
-        if not self.enabled:
-            return 0
-
-        state = 0
-        try:
-            state = float(self._attr_state) / 100
-        except ValueError:
-            state = 0
-
-        if self.minimum > self.maximum:
-            state = 0
-
-        units = (self.maximum - self.minimum) * state
-        state = self.minimum + units
-
-        precision = pow(10, self.precision)
-
-        if self.round == ROUND_FLOOR:
-            state = floor(state * precision) / precision
-        elif self.round == ROUND_CEIL:
-            state = ceil(state * precision) / precision
-        else:
-            state = round(state, self.precision)
-
-        if self.precision == 0:
-            state = int(state)
-
-        return state if self.available else STATE_UNAVAILABLE
+    def units(self) -> float:
+        return self.maximum - self.minimum
 
     @property
     def raw_state(self) -> float:
         """Return the state of the sensor."""
         state = 0
         try:
-            state = float(self._attr_state) / 100
+            state = float(self._sensor_state) / 100
         except ValueError:
             state = 0
 
@@ -348,27 +351,12 @@ class PidController(SensorEntity):
 
             try:
                 set_point = float(set_point)
-            except (ValueError) as ex:
+            except (ValueError):
                 set_point = 0
 
             return float(set_point)
 
         return float(0)
-
-    @property
-    def unit_of_measurement(self) -> str:
-        """Returns Unit Of Measurement"""
-
-        if self._unit_of_measurement_template is not None:
-            try:
-                unit_of_measurement = self._unit_of_measurement_template.async_render(
-                    parse_result=False
-                )
-            except (TemplateError, TypeError) as ex:
-                self.show_template_exception(ex, CONF_UNIT_OF_MEASUREMENT)
-                unit_of_measurement = DEFAULT_UNIT_OF_MEASUREMENT
-
-        return unit_of_measurement
 
     @property
     def device_class(self) -> SensorDeviceClass:
@@ -438,11 +426,11 @@ class PidController(SensorEntity):
                 )
             except (TemplateError, TypeError) as ex:
                 self.show_template_exception(ex, CONF_PROPORTIONAL)
-                return float(0)
+                return 0
 
             try:
                 proportional = float(proportional)
-            except (ValueError) as ex:
+            except (ValueError):
                 proportional = 0
 
             if self.invert:
@@ -652,15 +640,6 @@ class PidController(SensorEntity):
                 self._entities += info.entities
                 self._reset_pid += info.entities
 
-        if self._unit_of_measurement_template is not None:
-            try:
-                info = self._unit_of_measurement_template.async_render_to_info()
-            except (TemplateError, TypeError) as ex:
-                self.show_template_exception(ex, CONF_UNIT_OF_MEASUREMENT)
-            else:
-                self._entities += info.entities
-                self._force_update += info.entities
-
         if self._device_class_template is not None:
             try:
                 info = self._device_class_template.async_render_to_info()
@@ -693,6 +672,8 @@ class PidController(SensorEntity):
                 self.show_template_exception(ex, CONF_ENABLED)
             else:
                 self._entities += info.entities
+                self._reset_pid += info.entities
+                self._force_update += info.entities
                 self._enabled_entities += info.entities
 
         if self._proportional_template is not None:
@@ -779,32 +760,43 @@ class PidController(SensorEntity):
         self._update_sensor()
 
     def _update_sensor(self, entity=None) -> None:
-        if self.set_point == 0:
-            self._attr_state = 0
-            return
-
         if entity in self._reset_pid:
             self.reset_pid()
+
+        if not self.enabled:
+            return
+
+        if self.set_point == 0:
+            self._sensor_state = 0
+            return
+
+        if not self.updating_queue_lock():
+            return
 
         source = self.source
         set_point = self.set_point
 
         if self.proportional == 0 and self.integral == 0 and self.derivative == 0:
-            self._attr_state = 0 if self.invert else 100
+            if entity != self._source:
+                return
+
+            self._sensor_state = 0 if self.invert else 100
             if source >= set_point:
-                self._attr_state = 100 if self.invert else 0
-            if self._tunning:
-                self.feedback_autotune()
+                self._sensor_state = 100 if self.invert else 0
         else:
+            p_base = self.proportional
+            i_base = self.integral
+            d_base = self.derivative
+
             if self._pid is None:
-                self._pid = PID(self.proportional, self.integral, self.derivative)
+                self._pid = PID(p_base, i_base, d_base, logger=_LOGGER)
             else:
-                if self.proportional != self._pid.kpg:
-                    self._pid.kpg = self.proportional
-                if self.integral != self._pid.kig:
-                    self._pid.kig = self.integral
-                if self.derivative != self._pid.kdg:
-                    self._pid.kdg = self.derivative
+                if p_base != self._pid.kp:
+                    self._pid.kp = p_base
+                if i_base != self._pid.ki:
+                    self._pid.ki = i_base
+                if d_base != self._pid.kd:
+                    self._pid.kd = d_base
 
             if self.sample_time != self._pid.sample_time:
                 self._pid.sample_time = self.sample_time
@@ -816,14 +808,15 @@ class PidController(SensorEntity):
                 self.reset_pid()
                 self._pid.set_point = set_point
 
-            self._pid.update(source)
-            if self._tunning:
-                self.feedback_autotune()
+            if entity == self._source:
+                self._pid.update(source)
 
             output = float(self._pid.output)
 
             output = max(min(output, 100), 0)
-            self._attr_state = output
+            self._sensor_state = output
+
+        self.updating_queue_unlock()
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
@@ -836,6 +829,9 @@ class PidController(SensorEntity):
             self._update_sensor(entity=entity)
             if last_state != self.state or entity in self._force_update:
                 self.async_schedule_update_ha_state(True)
+
+            if entity == self._source:
+                self.feedback_autotune()
 
         # pylint: disable=unused-argument
         @callback
@@ -872,93 +868,157 @@ class PidController(SensorEntity):
         if self.source > self.set_point:
             return
 
+        if self._tunning_data:
+            return
+
         self._tunning_data = {}
+        self._tunning_data["tunning_stage"] = "warming"
 
         old_data = {"p": self.p, "i": self.i, "d": self.d, "set": self.source}
         self._tunning_data["old_data"] = old_data
 
         self.update_entity(self._enabled_entities[0], STATE_OFF)
-        self.update_entity(self._p_entities[0], 0)
+
+        self._tunning_data["prop_calculation"] = 0.25
+        self._tunning_data["prop_tester"] = 0
+        self._tunning_data["last_overshoot_count"] = 0
+        self.update_entity(self._p_entities[0], self._tunning_data["prop_calculation"])
         self.update_entity(self._i_entities[0], 0)
         self.update_entity(self._d_entities[0], 0)
         self.reset_pid()
 
-        self._tunning_data["tunning_stage"] = "warming"
         self._tunning_data["start_time"] = datetime.now()
         self._tunning_data["start_feedback"] = self.source
         self._tunning_data["stage_time"] = self._tunning_data["start_time"].timestamp()
         self._tunning_data["cross_time"] = []
         self._tunning_data["overshoot"] = []
+        self._tunning_data["overshoot_time"] = []
 
         self.hass.states.async_set(self._enabled_entities[0], STATE_ON)
 
         self._tunning = True
+        self.autotune_queue_unlock()
 
     def feedback_autotune(self):
         ### http://faculty.mercer.edu/jenkins_he/documents/TuningforPIDControllers.pdf
 
-        if not self._tunning:
+        if not self.autotune_queue_lock():
             return
+
+        feedback_point = self.source
+        set_point = self.set_point
 
         call_time = datetime.now().timestamp()
         stage_time = self._tunning_data["stage_time"]
-        delta_stage = abs(call_time - stage_time)
-        delta_point = abs(self.source - self.set_point)
+        delta_stage_time = abs(call_time - stage_time)
+        delta_point = abs(feedback_point - set_point)
 
         if self._tunning_data["tunning_stage"] == "warming":
-            if self.source >= self.set_point:
-                self._tunning_data["cross_time"].append(delta_stage)
+            if feedback_point >= set_point:
+
+                if "tunning_last_point_time" in self._tunning_data:
+                    cross_time = self.get_time(
+                        self._tunning_data["tunning_last_point_time"],
+                        self._tunning_data["tunning_last_point"],
+                        delta_stage_time,
+                        feedback_point,
+                        set_point,
+                    )
+                    self._tunning_data["cross_time"].append(cross_time)
+
                 self._tunning_data["overshoot"].append(delta_point)
+                self._tunning_data["overshoot_time"].append(call_time)
                 self._tunning_data["tunning_stage"] = "cooling"
 
+                if "tunning_last_point_time" in self._tunning_data:
+                    del self._tunning_data["tunning_last_point_time"]
+
+                if "tunning_last_point" in self._tunning_data:
+                    del self._tunning_data["tunning_last_point"]
+            else:
+                self._tunning_data["tunning_last_point_time"] = delta_stage_time
+                self._tunning_data["tunning_last_point"] = feedback_point
+
         elif self._tunning_data["tunning_stage"] == "cooling":
-            delta_mean = mean(self._tunning_data["overshoot"])
-            target_cooling = self.set_point - delta_mean
-            if self.source <= target_cooling:
-                self._tunning_data["cross_time"].append(delta_stage)
-                self._tunning_data["overshoot"].append(delta_point)
+            if feedback_point <= set_point:
+                if "tunning_last_point_time" in self._tunning_data:
+                    cross_time = self.get_time(
+                        self._tunning_data["tunning_last_point_time"],
+                        self._tunning_data["tunning_last_point"],
+                        delta_stage_time,
+                        feedback_point,
+                        set_point,
+                    )
+                    self._tunning_data["cross_time"].append(cross_time)
+
                 self._tunning_data["tunning_stage"] = "warming"
-            if len(self._tunning_data["overshoot"]) >= 4:
+
+                if "tunning_last_point_time" in self._tunning_data:
+                    del self._tunning_data["tunning_last_point_time"]
+
+                if "tunning_last_point" in self._tunning_data:
+                    del self._tunning_data["tunning_last_point"]
+            else:
+                self._tunning_data["tunning_last_point_time"] = delta_stage_time
+                self._tunning_data["tunning_last_point"] = feedback_point
+
+            if len(self._tunning_data["overshoot_time"]) >= 10:
                 self._tunning_data["tunning_stage"] = "result"
 
         elif self._tunning_data["tunning_stage"] == "result":
-            self.hass.states.async_set(self._enabled_entities[0], STATE_OFF)
-            start_feedback = self._tunning_data["start_feedback"]
-            mean_overshoot = mean(self._tunning_data["overshoot"])
-            overshoot_time = self.get_time(
-                0,
-                start_feedback,
-                mean(self._tunning_data["cross_time"]),
-                mean_overshoot,
-                self.set_point,
-            )
+            self.update_entity(self._enabled_entities[0], STATE_OFF)
+            # start_feedback = self._tunning_data["start_feedback"]
+            # mean_overshoot = mean(self._tunning_data["overshoot"])
+            # overshoot_time = mean(self._tunning_data["cross_time"])
 
             # First Method Calculation
-            p_value = 2 * mean_overshoot
-            i_value = overshoot_time * 2
-            d_value = overshoot_time / 2
+            p_value = self._tunning_data["prop_calculation"]  # 2 * mean_overshoot
+            # i_value = overshoot_time * 2
+            # d_value = overshoot_time / 2
 
             pcr_calculation = []
 
-            for inx, val in enumerate(self._tunning_data["cross_time"]):
+            for inx, val in enumerate(self._tunning_data["overshoot_time"]):
                 if inx == 0:
                     continue
-                if (inx % 2) == 0:
-                    pcr_value = abs(val - self._tunning_data["cross_time"][inx - 2])
-                    pcr_calculation.append(pcr_value)
+                # if (inx % 2) != 0:
+                pcr_value = abs(val - self._tunning_data["overshoot_time"][inx - 1])
+                pcr_calculation.append(pcr_value)
 
             pcr_value = mean(pcr_calculation)
 
             p_value2 = 0.6 * p_value
-            i_value2 = 0.5 * pcr_value
-            d_value2 = 0.125 * pcr_value
+            i_value2 = (0.5 * pcr_value) / 100
+            d_value2 = (0.125 * pcr_value) / 100
 
             self._tunning_data["result"] = {"p": p_value2, "i": i_value2, "d": d_value2}
+            self.autotune_queue_unlock()
             self.stop_autotune()
+            return
 
+        overshoot_count = len(self._tunning_data["overshoot_time"])
+        prop_tester = self._tunning_data["prop_tester"]
+
+        _LOGGER.warning(f"Calculation {overshoot_count} tester {prop_tester}")
+
+        if self._tunning_data["last_overshoot_count"] == overshoot_count:
+            self._tunning_data["prop_tester"] += 1
+
+        # if self._tunning_data["prop_tester"] > 10:
+        #     self._tunning_data["prop_tester"] = 0
+        #     self._tunning_data["prop_calculation"] += 0.10
+        #     self.update_entity(
+        #         self._p_entities[0], self._tunning_data["prop_calculation"]
+        #     )
+
+        self._tunning_data["last_overshoot_count"] = overshoot_count
         self._tunning_data["stage_time"] = call_time
+        self.autotune_queue_unlock()
 
     def stop_autotune(self):
+        if not self.autotune_queue_lock():
+            return
+
         self.update_entity(self._enabled_entities[0], STATE_ON)
         self.reset_pid()
 
@@ -969,6 +1029,8 @@ class PidController(SensorEntity):
 
         self._tunning = False
         self._tunning_data = {}
+
+        self.autotune_queue_unlock()
 
     def update_entity(self, entity_id, state):
         entity = self.hass.states.get(entity_id)
@@ -985,3 +1047,29 @@ class PidController(SensorEntity):
         m = (y2 - y1) / (x2 - x1)
         c = y2 - (m * x2)
         return m, c
+
+    def autotune_queue_lock(self):
+        if not self._tunning:
+            self._tunnig_calculating = False
+            return
+
+        if self._tunnig_calculating:
+            return False
+
+        self._tunnig_calculating = True
+        return True
+
+    def autotune_queue_unlock(self):
+        self._tunnig_calculating = False
+        return True
+
+    def updating_queue_lock(self):
+        if self._updating:
+            return False
+
+        self._updating = True
+        return True
+
+    def updating_queue_unlock(self):
+        self._updating = False
+        return True
