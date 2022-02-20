@@ -108,21 +108,21 @@ input_number:
     name: Proportional
     initial: 0
     min: 0
-    max: 1
+    max: 10
     step: 0.01
 
   integral:
     name: Integral
     initial: 0
     min: 0
-    max: 1
+    max: 10
     step: 0.01
 
   derivative:
     name: Derivative
     initial: 0
     min: 0
-    max: 1
+    max: 10
     step: 0.01
 
   precision:
@@ -163,10 +163,10 @@ input_number:
 
 **windup** _(number/template) (Optional: Default 0)_ The maximum value to increment in the integral portion of the PID, check _Calibrate the PID_ section for more information (Ex. 5)
 
-**p/i/d** _(number/template) (Optional: Default 0)_ The PID calibration values (value 0-1) , check _Calibrate the PID_ section to more information
+**p/i/d** _(number/template) (Optional: Default 0)_ The PID calibration values, check _Calibrate the PID_ section to more information
 
 **unit_of_measurement** _(string/template) (Optional: Default points)_ The unit of measurement of the sensor
-# Calibrate the PID
+# Basic Calibration of a PID
 For this I'm gonna use a practical example on calibrating the PID to be used as a thermostat to a climate system. Warming a room
 The PID is calibrated using the p|i|d variables.
 
