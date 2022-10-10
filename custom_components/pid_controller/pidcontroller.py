@@ -74,17 +74,18 @@ class PIDController:
 
         # Calculate error
         error = self._set_point - feedback_value
-
-        # Calculate delta Input
-        delta_input = feedback_value - (
-            self._last_input if self._last_input is not None else feedback_value
+        last_error = self._set_point - (
+            self._last_input if self._last_input is not None else self._set_point
         )
+
+        # Calculate delta error
+        delta_error = error - last_error
 
         # Calculate  terms
         self._p_term = self._kp * error
         self._i_term += self._ki * error * delta_time
         self._i_term = self.clamp_value(self._i_term, self._windup)
-        self._d_term = self._kd * delta_input / delta_time
+        self._d_term = self._kd * delta_error / delta_time
 
         # Compute final output
         self._output = self._p_term + self._i_term + self._d_term
