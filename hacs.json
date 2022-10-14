@@ -4,6 +4,5 @@
     "homeassistant": "2021.9",
     "render_readme": true,
     "persistent_directory": "codes",
-    "iot_class": "Assumed State",
     "filename": "pid_controller.zip"
   }
