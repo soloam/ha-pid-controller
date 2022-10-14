@@ -3,8 +3,6 @@
     "zip_release": true,
     "homeassistant": "2021.9",
     "render_readme": true,
-    "domains": [ "sensor"],
     "persistent_directory": "codes",
-    "iot_class": "Assumed State",
     "filename": "pid_controller.zip"
   }
