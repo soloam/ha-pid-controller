@@ -762,10 +762,6 @@ class PidController(SensorEntity):
         if not self.enabled:
             return
 
-        if self.set_point == 0:
-            self._sensor_state = 0
-            return
-
         source = self.source
         set_point = self.set_point
 
