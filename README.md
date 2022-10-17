@@ -174,7 +174,8 @@ The PID is calibrated using the p|i|d variables.
 
 - Set all to zero. It helps to have this as an input_number.
 - Set target temperature (set_point). It helps to have this as an input_number.
-- Set minimum to 0 (for now). It helps to have this as an input_number.- Set maximum to 1 (for now). It helps to have this as an input_number.
+- Set minimum to 0 (for now). It helps to have this as an input_number.
+- Set maximum to 1 (for now). It helps to have this as an input_number.
 - Set the entity_id to a sensor that reports the temperature of the room
 
 
