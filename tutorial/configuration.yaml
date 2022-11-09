@@ -1,0 +1,106 @@
+default_config:
+
+pid_controller:
+
+sensor:
+- platform: pid_controller
+  name: pid_thermometer
+  enabled: '{{ states("input_boolean.pid_th_enabled") }}'
+  set_point: '{{ states("input_number.pid_th_set_point") }}'
+  p: '{{ states("input_number.pid_th_proportional") }}'
+  i: '{{ states("input_number.pid_th_integral") }}'
+  d: '{{ states("input_number.pid_th_derivative") }}'
+  entity_id: input_number.pid_th_reading
+  invert: '{{ states("input_boolean.pid_th_invert") }}'
+  precision: '{{ states("input_number.pid_th_precision") }}'
+  minimum: '{{ states("input_number.pid_th_minimum") }}'
+  maximum: '{{ states("input_number.pid_th_maximum") }}'
+  round: '{{ states("input_select.pid_th_round") }}'
+  sample_time: '{{ states("input_number.pid_th_sample_time") }}'
+  windup: '{{ states("input_number.pid_th_windup") }}'
+
+input_boolean:
+  pid_th_invert:
+    name: Invert
+    initial: no
+  pid_th_enabled:
+    name: Enabled
+
+input_select:
+  pid_th_round:
+    initial: Round
+    options:
+      - Floor
+      - Ceil
+      - Round
+
+input_number:
+  pid_th_sample_time:
+    name: Sample Time
+    initial: 0
+    min: 0
+    max: 30
+    step: 1
+
+  pid_th_minimum:
+    name: Minimum
+    initial: 0
+    min: 0
+    max: 5
+    step: 1
+
+  pid_th_maximum:
+    name: Maximum
+    initial: 5
+    min: 0
+    max: 50
+    step: 1
+
+  pid_th_set_point:
+    name: Set Point
+    initial: 15
+    min: 0
+    max: 30
+    step: 1 
+
+  pid_th_proportional:
+    name: Proportional
+    initial: 0
+    min: 0
+    max: 10
+    step: 0.01
+
+  pid_th_integral:
+    name: Integral
+    initial: 0
+    min: 0
+    max: 10
+    step: 0.01
+
+  pid_th_derivative:
+    name: Derivative
+    initial: 0
+    min: 0
+    max: 10
+    step: 0.01
+
+  pid_th_precision:
+    name: Precision
+    initial: 2
+    min: 0
+    max: 10
+    step: 1
+
+  pid_th_windup:
+    name: Windup
+    initial: 0
+    min: 0
+    max: 30
+    step: 1
+
+  pid_th_reading:
+    name: Sensor Reading
+    initial: 0
+    min: -1000
+    max: 1000
+    step: 1

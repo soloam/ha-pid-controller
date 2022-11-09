@@ -8,3 +8,6 @@ __pycache__/
 
 #Resources
 resources/*.psd
+
+#OS X
+.DS_Store
