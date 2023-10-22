@@ -797,8 +797,7 @@ class PidController(SensorEntity):
                 self.reset_pid()
                 self._pid.set_point = set_point
 
-            if entity == self._source:
-                self._pid.update(source)
+            self._pid.update(source)
 
             output = float(self._pid.output)
 
