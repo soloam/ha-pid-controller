@@ -206,7 +206,7 @@ To reduce the waving and the overshoot we can add some Derivate, to calculate th
 ![PID Phase 4][pid_phase4]
 
 ### Controlling Waveup
-The Integral part of the PID works by incrementing the error from the reading to increment the output. Sometime it can happen, if the error is too big that the incremental part scales the output way too far. To handle this you can set a maximum incremental value in the _waveup_ value.
+The Integral part of the PID works by incrementing the error from the reading to increment the output. Sometime it can happen, if the error is too big that the incremental part scales the output way too far. To handle this you can set a maximum incremental value in the _windup_ value.
 ### Debugging the PID
 You can look at the attributes of the sensor to the p|i|d variables, that should return the amount that each part is contributing to the PID output.
 # Inverted PID
